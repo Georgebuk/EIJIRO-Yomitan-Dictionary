@@ -1,0 +1,67 @@
+{
+  "type": "structured-content",
+  "content": [
+    {
+      "tag": "ul",
+      "lang": "en",
+      "style": { "listStyleType": "\"＊\"" },
+      "content": [
+        {
+          "tag": "ol",
+          "content": [
+            {
+              "tag": "li",
+              "style": { "listStyleType": "\"①\"", "paddingLeft": "0.25em" },
+              "data": { "sense-number": "1" },
+              "content": [
+                { "tag": "li", "content": "AAAA" },
+                { "tag": "li", "content": "BBBB" },
+                { "tag": "li", "content": "CCCC" }
+              ]
+            },
+            {
+              "tag": "div",
+              "style": { "marginLeft": "0.5em" },
+              "data": { "content": "extra-info" },
+              "content": {
+                "tag": "div",
+                "content": {
+                  "tag": "div",
+                  "style": {
+                    "borderStyle": "none none none solid",
+                    "padding": "0.5rem",
+                    "borderRadius": "0.4rem",
+                    "borderWidth": "calc(3em / var(--font-size-no-units, 14))",
+                    "marginTop": "0.5rem",
+                    "marginBottom": "0.5rem",
+                    "borderColor": "var(--text-color, var(--fg, #333))",
+                    "backgroundColor": "color-mix(in srgb, var(--text-color, var(--fg, #333)) 5%, transparent)"
+                  },
+                  "data": {
+                    "content": "example-sentence",
+                    "sentence-key": "浸した",
+                    "source": "125790",
+                    "source-type": "tat"
+                  },
+                  "content": [
+                    {
+                      "tag": "div",
+                      "style": { "fontSize": "1.3em" },
+                      "data": { "content": "example-sentence-a" },
+                      "content": [
+                        {
+                          "tag": "span",
+                          "content": ["This is an example sentence"]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

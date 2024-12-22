@@ -1,0 +1,10 @@
+{
+  "dependencies": {
+    "compromise": "^14.14.3",
+    "compromise-speech": "^0.1.1",
+    "compromise-syllables": "^0.0.6",
+    "iconv-lite": "^0.6.3",
+    "xlsx": "^0.18.5",
+    "yomichan-dict-builder": "^2.9.2"
+  }
+}
