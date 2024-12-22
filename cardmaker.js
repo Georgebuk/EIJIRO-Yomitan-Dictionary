@@ -972,8 +972,8 @@ async function createTags(dictionary) {
 // Process the lines
 (async () => {
     try {
-        //const inputFile = "EIJIRO144-10.txt"; 
-        const inputFile = "input.txt";
+        //const inputFile = "test data/EIJIRO144-10.txt"; 
+        const inputFile = "test data/input.txt";
         const termData = await processFile(inputFile);
 
         const dictionary = new Dictionary({
