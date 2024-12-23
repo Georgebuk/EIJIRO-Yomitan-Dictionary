@@ -6,6 +6,21 @@ const iconv = require('iconv-lite');
 const nlp = require('compromise');
 nlp.plugin(require('compromise-speech'))
 
+const testDataPath = "test_data/input.txt";
+const realDataPath = "test_data/EIJIRO144-10.txt"
+
+const irregularAdjectives = {
+    "good": { comparative: "better", superlative: "best" },
+    "bad": { comparative: "worse", superlative: "worst" },
+    "far": { comparative: "farther", superlative: "farthest" },
+    "little": { comparative: "less", superlative: "least" },
+    "many": { comparative: "more", superlative: "most" },
+    "much": { comparative: "more", superlative: "most" },
+    "old": { comparative: "older", superlative: "oldest" },
+    "late": { comparative: "later", superlative: "latest" },
+    "few": { comparative: "fewer", superlative: "fewest" },
+};
+
 function extractSpeechExamples(line, definition) {
     let englishExample = null;
     let japaneseExample = null;
@@ -255,93 +270,6 @@ function addEntry(dictionary, term, reading, sc, entryTag, termTags){
     dictionary.addTerm(entry);
 }
 
-async function testStructure(){
-    const dictionary = new Dictionary({
-            fileName: 'test2.zip',
-          });
-    await createIndex(dictionary);
-
-    let sContent = {
-        type: "structured-content",
-        content: []
-    }
-
-    let innerinner = {
-        tag: "ol",
-        content: []
-    }
-
-    let innerinnerinner = {
-        tag: "li",
-        style: {
-            listStyleType: "\"①\"",
-            paddingLeft: "0.25em"
-        },
-        data: { "sense-number": "1" },
-        content: [
-            {tag: "li", content: "AAAA"},
-            {tag: "li", content: "BBBB"},
-            {tag: "li", content: "CCCC"}
-        ]
-    }
-
-    let exampleSentence = {
-        tag: "div",
-        style: { marginLeft: "0.5em" },
-        data: { content: "extra-info" },
-        content:{
-            tag: "div",
-            content: {
-                tag: "div",
-                style: {
-                    borderStyle: "none none none solid",
-                    padding: "0.5rem",
-                    borderRadius: "0.4rem",
-                    borderWidth: "calc(3em / var(--font-size-no-units, 14))",
-                    marginTop: "0.5rem",
-                    marginBottom: "0.5rem",
-                    borderColor: "var(--text-color, var(--fg, #333))",
-                    backgroundColor: "color-mix(in srgb, var(--text-color, var(--fg, #333)) 5%, transparent)"
-                },
-                data: {
-                    content: "example-sentence",
-                    "sentence-key": "浸した",
-                    source: "125790",
-                    "source-type": "tat"
-                },
-                content:[
-                    {
-                        tag: "div",
-                        style: { "fontSize": "1.3em" },
-                        "data": { "content": "example-sentence-a" },
-                        content: [
-                            {
-                                tag: "span",
-                                content: ["This is an example sentence"]
-                            }
-                        ]
-                    }
-                ]
-            }
-        }
-    }
-
-    innerinner.content.push(innerinnerinner);
-    innerinner.content.push(exampleSentence);
-    sContent.content.push(innerinner);
-
-    addEntry(dictionary, "read", '', sContent, '名詞', '古')
-
-    return dictionary;
-}
-
-function getFormIfExists(inflections, searchString) {
-    const match = inflections.find(
-        inflection => inflection.form && inflection.form.toLowerCase() === searchString.toLowerCase()
-    );
-    return match ? match.form : null; // Return the form if found, otherwise null
-}
-
 function createEnglishExample(term, example, inflections) {
     const lowerCasedTerm = term.toLowerCase();
     const capitalizedTerm = term.charAt(0).toUpperCase() + term.slice(1).toLowerCase();
@@ -535,35 +463,94 @@ function createNounInflections(inflections, term){
     }
 }
 
+/**
+ * Generates comparative and superlative forms for adjectives.
+ * @param {Array} inflections - Array to store the inflections.
+ * @param {string} term - The word to be inflected.
+ * @param {Array} syllables - Array of syllables of the term.
+ * @returns {Array} Updated inflections array.
+ */
 function createAdjectiveInflections(inflections, term) {
     const doc = nlp(term);
-    let syllables = doc.syllables();
+    const syllables = doc.syllables();
     const conjugations = doc.adjectives().conjugate();
-    //Usually adjectives have 2 conjugations methods based on number of syllables
-    //Compromise doesn't handle 'more' or 'most' transformations.
-    //Imperfect implementation
-    //This approach will result in incorrect conjugations for rare terms in the database.
-    //(but as they are incorrect and rare one will never come across these and they won't appear in Yomitan)
-    if(syllables[0].length < 3) {
-        let comparative = conjugations[0]?.Comparative
-        if(comparative && termNotEqual(term, comparative))
-            inflections.push({ type: "comparative", form: comparative});
 
-        let superlative = conjugations[0]?.Superlative
-        if(superlative && termNotEqual(term, superlative))
-            inflections.push({ type: "superlative", form: superlative});
-
-        let adverb = conjugations[0]?.Adverb
-        if(adverb && termNotEqual(term, adverb))
-            inflections.push({ type: "adverb", form: adverb});
-
-        if(conjugations[0]?.Noun != conjugations[0]?.Adjective)
-            inflections.push({ type: "noun", form: conjugations[0]?.Noun});
+    // Check if the term is irregular
+    if (irregularAdjectives[term]) {
+        inflections.push(
+            { type: "comparative", form: irregularAdjectives[term].comparative },
+            { type: "superlative", form: irregularAdjectives[term].superlative }
+        );
+        return;
     }
-    else{
-        inflections.push({ type: "comparative", form: "more " + term});
-        inflections.push({ type: "superlative", form: "most " + term});
+
+    // Rules-based approach for regular adjectives
+    const syllableCount = syllables[0].length;
+
+    if (syllableCount === 1) {
+        // Single-syllable adjectives
+        if (term.endsWith("e")) {
+            // Ends with 'e': just add 'r' and 'st'
+            inflections.push(
+                { type: "comparative", form: term + "r" },
+                { type: "superlative", form: term + "st" }
+            );
+        } else if (/[aeiou]([bcdfghjklmnpqrstvwxyz])$/.test(term)) {
+            // Ends with a single vowel + consonant (double the consonant)
+            const base = term + term.slice(-1);
+            inflections.push(
+                { type: "comparative", form: base + "er" },
+                { type: "superlative", form: base + "est" }
+            );
+        } else {
+            // Regular single syllable
+            inflections.push(
+                { type: "comparative", form: term + "er" },
+                { type: "superlative", form: term + "est" }
+            );
+        }
+    } else if (syllableCount === 2) {
+        // Two-syllable adjectives
+        if (term.endsWith("e")) {
+            // Ends with 'e': just add 'r' and 'st', and also add "more"
+            inflections.push(
+                { type: "comparative", form: term + "r" },
+                { type: "superlative", form: term + "st" },
+                { type: "comparative", form: "more " + term },
+                { type: "superlative", form: "most " + term }
+            );
+        } else if (term.endsWith("y")) {
+            // Ends in 'y' -> replace 'y' with 'i'
+            const base = term.slice(0, -1) + "i";
+            inflections.push(
+                { type: "comparative", form: base + "er" },
+                { type: "superlative", form: base + "est" },
+                { type: "comparative", form: "more " + term },
+                { type: "superlative", form: "most " + term }
+            );
+        } else {
+            // Use both "-er/-est" and "more/most" for two-syllable adjectives
+            inflections.push(
+                { type: "comparative", form: term + "er" },
+                { type: "superlative", form: term + "est" },
+                { type: "comparative", form: "more " + term },
+                { type: "superlative", form: "most " + term }
+            );
+        }
+    } else {
+        // Three or more syllables
+        inflections.push(
+            { type: "comparative", form: "more " + term },
+            { type: "superlative", form: "most " + term }
+        );
     }
+
+    let adverb = conjugations[0]?.Adverb
+    if(adverb && termNotEqual(term, adverb))
+        inflections.push({ type: "adverb", form: adverb});
+
+    if(conjugations[0]?.Noun != conjugations[0]?.Adjective)
+        inflections.push({ type: "noun", form: conjugations[0]?.Noun});
 }
 
 function createSentenceNounInflections(inflections, term) {
@@ -972,16 +959,16 @@ async function createTags(dictionary) {
 // Process the lines
 (async () => {
     try {
-        //const inputFile = "test data/EIJIRO144-10.txt"; 
-        const inputFile = "test data/input.txt";
+        //const inputFile = realDataPath; 
+        const inputFile = testDataPath;
         const termData = await processFile(inputFile);
 
         const dictionary = new Dictionary({
             fileName: 'test.zip',
           });
-        if(inputFile == "input.txt")
+        if(inputFile == testDataPath)
             await createIndex(dictionary, 'test');
-        if(inputFile == "EIJIRO144-10.txt")
+        if(inputFile == realDataPath)
             await createIndex(dictionary, '英辞郎');
         await createEntries(dictionary, termData);
         await createTags(dictionary);
