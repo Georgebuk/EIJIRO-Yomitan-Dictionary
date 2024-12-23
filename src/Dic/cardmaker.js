@@ -1,26 +1,14 @@
 const fs = require("fs");
 const readline = require("readline");
 const { Dictionary, DictionaryIndex, TermEntry } = require('yomichan-dict-builder');
-const { combineWithSpace } = require('./utils');
+const { combineWithSpace } = require('../../utils');
 const iconv = require('iconv-lite');
 const nlp = require('compromise');
-const { notEqual } = require("assert");
+const inflection = require('./inflections')
 nlp.plugin(require('compromise-speech'))
 
 const testDataPath = "test_data/input.txt";
 const realDataPath = "test_data/EIJIRO144-10.txt"
-
-const irregularAdjectives = {
-    "good": { comparative: "better", superlative: "best" },
-    "bad": { comparative: "worse", superlative: "worst" },
-    "far": { comparative: "farther", superlative: "farthest" },
-    "little": { comparative: "less", superlative: "least" },
-    "many": { comparative: "more", superlative: "most" },
-    "much": { comparative: "more", superlative: "most" },
-    "old": { comparative: "older", superlative: "oldest" },
-    "late": { comparative: "later", superlative: "latest" },
-    "few": { comparative: "fewer", superlative: "fewest" },
-};
 
 function extractSpeechExamples(line, definition) {
     let englishExample = null;
@@ -440,243 +428,6 @@ function replaceVerb(sentence, originalVerb, inflectedVerb) {
     return sentence.replace(regex, inflectedVerb || originalVerb);
 }
 
-function createNounInflections(inflections, term){
-    //add 'a' so that compromise treats the term as a noun (abandon -> a abandon)
-    //ungrammatical but gets the job done.
-    let newTerm = 'a ' + term;
-    const doc = nlp(newTerm);
-    let pluralForm = doc.nouns().toPlural().text();
-    if(pluralForm.substring(0,2) == 'a ')
-        pluralForm = pluralForm.substring(2, pluralForm.length);
-
-    //Sometimes the plural form is in as its own entry.
-    //Make sure term is singular before adding to avoid duplicates
-    if(doc.nouns().isSingular() && pluralForm != term)
-        inflections.push({ type: "plural", form: pluralForm });
-
-     // Add the possessive form
-     if (term.endsWith("s")) {
-        // If the term ends with "s", add just an apostrophe
-        inflections.push({ type: "possessive", form: term + "'" });
-    } else {
-        // Otherwise, append "'s"
-        inflections.push({ type: "possessive", form: term + "'s" });
-    }
-}
-
-/**
- * Generates comparative and superlative forms for adjectives.
- * @param {Array} inflections - Array to store the inflections.
- * @param {string} term - The word to be inflected.
- * @param {Array} syllables - Array of syllables of the term.
- * @returns {Array} Updated inflections array.
- */
-function createAdjectiveInflections(inflections, term) {
-    const doc = nlp(term);
-    const syllables = doc.syllables();
-    const conjugations = doc.adjectives().conjugate();
-
-    // Check if the term is irregular
-    if (irregularAdjectives[term]) {
-        inflections.push(
-            { type: "comparative", form: irregularAdjectives[term].comparative },
-            { type: "superlative", form: irregularAdjectives[term].superlative }
-        );
-        return;
-    }
-
-    // Rules-based approach for regular adjectives
-    const syllableCount = syllables[0].length;
-
-    if (syllableCount === 1) {
-        // Single-syllable adjectives
-        if (term.endsWith("e")) {
-            // Ends with 'e': just add 'r' and 'st'
-            inflections.push(
-                { type: "comparative", form: term + "r" },
-                { type: "superlative", form: term + "st" }
-            );
-        } else if (/[aeiou]([bcdfghjklmnpqrstvwxyz])$/.test(term)) {
-            // Ends with a single vowel + consonant (double the consonant)
-            const base = term + term.slice(-1);
-            inflections.push(
-                { type: "comparative", form: base + "er" },
-                { type: "superlative", form: base + "est" }
-            );
-        } else {
-            // Regular single syllable
-            inflections.push(
-                { type: "comparative", form: term + "er" },
-                { type: "superlative", form: term + "est" }
-            );
-        }
-    } else if (syllableCount === 2) {
-        // Two-syllable adjectives
-        if (term.endsWith("e")) {
-            // Ends with 'e': just add 'r' and 'st', and also add "more"
-            // Two syllable adjectives can go either way.
-            inflections.push(
-                { type: "comparative", form: term + "r" },
-                { type: "superlative", form: term + "st" },
-                { type: "comparative", form: "more " + term },
-                { type: "superlative", form: "most " + term }
-            );
-        } else if (term.endsWith("y")) {
-            // Ends in 'y' -> replace 'y' with 'i'
-            const base = term.slice(0, -1) + "i";
-            inflections.push(
-                { type: "comparative", form: base + "er" },
-                { type: "superlative", form: base + "est" },
-                { type: "comparative", form: "more " + term },
-                { type: "superlative", form: "most " + term }
-            );
-        } else {
-            // Use both "-er/-est" and "more/most" for two-syllable adjectives
-            inflections.push(
-                { type: "comparative", form: term + "er" },
-                { type: "superlative", form: term + "est" },
-                { type: "comparative", form: "more " + term },
-                { type: "superlative", form: "most " + term }
-            );
-        }
-    } else {
-        // Three or more syllables
-        inflections.push(
-            { type: "comparative", form: "more " + term },
-            { type: "superlative", form: "most " + term }
-        );
-    }
-
-    let adverb = conjugations[0]?.Adverb
-    if(adverb && termNotEqual(term, adverb))
-        inflections.push({ type: "adverb", form: adverb});
-
-    if(conjugations[0]?.Noun != conjugations[0]?.Adjective)
-        inflections.push({ type: "noun", form: conjugations[0]?.Noun});
-}
-
-function createSentenceNounInflections(inflections, term) {
-    const doc = nlp(term);
-    const nouns = doc.nouns();
-
-    if (nouns.length === 0) {
-        // No nouns found; return the original term
-        inflections.push({ type: "original", form: term });
-        return;
-    }
-
-    // Identify the main noun (the last noun in the phrase)
-    const mainNoun = nouns.slice(-1).text();
-
-    // Pluralize the main noun if applicable
-    const pluralForm = nouns.toPlural().text();
-
-    // Handle the special case where the noun is preceded by an article or modifier
-    if (pluralForm !== term) {
-        // Replace the main noun with its plural form
-        const updatedTerm = replaceNounWithModifiers(term, mainNoun, pluralForm);
-        inflections.push({ type: "plural", form: updatedTerm });
-    } else {
-        inflections.push({ type: "original", form: term });
-    }
-}
-
-// Helper function to replace the main noun with its plural form
-function replaceNounWithModifiers(sentence, originalNoun, pluralNoun) {
-    const regex = new RegExp(`\\b${originalNoun}\\b`, 'i');
-    return sentence.replace(regex, pluralNoun || originalNoun);
-}
-
-function inflectSentence(inflections, term, recursiveCall){
-    const words = term.split(' ');
-    const verb = words[0]; // The first word is the verb
-    const particle = words.slice(1).join(' '); // The rest are particles or phrasal components
-
-    // Inflect the verb separately
-    const verbDoc = nlp(verb);
-    
-    let verbPast = verbDoc.verbs().toPastTense().text();
-    if (verbPast && termNotEqual(term, verbPast + ' ' + particle)) {
-        if (recursiveCall) verbPast = removeStartingI(verbPast);
-        inflections.push({ type: "past", form: verbPast + ' ' + particle });
-        inflectionOccured = true;
-    }
-
-    let verbPresent = verbDoc.verbs().toPresentTense().text();
-    if (verbPresent && termNotEqual(term, verbPresent + ' ' + particle)) {
-        if (recursiveCall) verbPresent = removeStartingI(verbPresent);
-        inflections.push({ type: "present", form: verbPresent + ' ' + particle });
-        inflectionOccured = true;
-    }
-
-    let verbFuture = verbDoc.verbs().toFutureTense().text();
-    if (verbFuture && termNotEqual(term, verbFuture + ' ' + particle)) {
-        if (recursiveCall) verbFuture = removeStartingI(verbFuture);
-        inflections.push({ type: "future", form: verbFuture + ' ' + particle });
-        inflectionOccured = true;
-    }
-
-    let verbGerund = verbDoc.verbs().toGerund().text();
-    if (verbGerund && termNotEqual(term, verbGerund + ' ' + particle)) {
-        if(verbGerund.toLowerCase().startsWith("is ")) //remove "is"
-            verbGerund = verbGerund.slice(3);  
-        inflections.push({ type: "present participle", form: verbGerund + ' ' + particle });
-        inflectionOccured = true;
-    }
-
-    let verbPastParticiple = verbDoc.verbs().toPastParticiple().text();
-    if (verbPastParticiple && termNotEqual(term, verbPastParticiple + ' ' + particle)) {
-        if(verbPastParticiple.toLowerCase().startsWith("has ")) //remove "has"
-            verbPastParticiple = verbPastParticiple.slice(4);  
-        if(verbPast != verbPastParticiple){
-            inflections.push({ type: "past participle", form: verbPastParticiple + ' ' + particle });
-            inflectionOccured = true;
-        }
-    }
-
-    if(!inflectionOccured && !recursiveCall){
-        inflectSentence(inflections, "I " + term, true)
-    }
-}
-
-
-function removeStartingI(term){
-    return term.slice(2);
-}
-
-function termNotEqual(term, inflection){
-    return term.toLowerCase() != inflection.toLowerCase();
-}
-
-function createVerbInflections(inflections, term){
-    let newTerm = "I " + term;
-    const doc = nlp(newTerm);
-    const conjugations = doc.verbs().conjugate();
-
-    if(term.split(' ').length > 1){
-        inflectSentence(inflections, term, false);
-    }
-    else{
-        // Check if the form is defined before pushing it to the inflections array
-        const pastTense = conjugations[0]?.PastTense
-        if (pastTense && termNotEqual(term, pastTense)) {
-            inflections.push({ type: "past", form: conjugations[0].PastTense });
-        }
-
-        if (conjugations[0]?.Gerund) {
-            inflections.push({ type: "present participle", form: conjugations[0].Gerund });
-        }
-
-        if (conjugations[0]?.FutureTense) {
-            inflections.push({ type: "future", form: conjugations[0].FutureTense });
-        }
-
-        if (conjugations[0]?.PresentTense) {
-            inflections.push({ type: "third-person singular present", form: conjugations[0].PresentTense });
-        }
-    }
-}
-
 async function* streamDictionary(lines) {
     for (const [key, value] of Object.entries(lines)) {
         yield { key, value }; // Yield one entry at a time
@@ -699,13 +450,7 @@ async function createEntries(dictionary, lines){
     let curLine = 0;
     let percentage = 0;
     for await (const { key, value } of streamDictionary(lines)) {
-        let inflections = [];
-        if(value.find((e) => e['tag'] == '名'))
-            createNounInflections(inflections, key);
-        if(value.find((e) => e['tag'].includes('動')))
-            createVerbInflections(inflections, key);
-        if(value.find((e) => e['tag'].includes('形')))
-            createAdjectiveInflections(inflections, key);
+       let inflections = inflection.createInflectionsForTerm(key, value);
         // if(!value.find((e) => e['tag'])){
         //     //inflectSentence(inflections, key);
         //     //createSentenceNounInflections(inflections, key);
@@ -958,11 +703,13 @@ async function createTags(dictionary) {
       });
 }
 
+
 // Process the lines
 (async () => {
     try {
-        //const inputFile = realDataPath; 
-        const inputFile = testDataPath;
+        const inputFile = realDataPath; 
+        //const inputFile = testDataPath;
+        await inflection.prepareInflections("noun.csv");
         const termData = await processFile(inputFile);
 
         const dictionary = new Dictionary({
