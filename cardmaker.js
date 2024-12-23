@@ -4,6 +4,7 @@ const { Dictionary, DictionaryIndex, TermEntry } = require('yomichan-dict-builde
 const { combineWithSpace } = require('./utils');
 const iconv = require('iconv-lite');
 const nlp = require('compromise');
+const { notEqual } = require("assert");
 nlp.plugin(require('compromise-speech'))
 
 const testDataPath = "test_data/input.txt";
@@ -513,6 +514,7 @@ function createAdjectiveInflections(inflections, term) {
         // Two-syllable adjectives
         if (term.endsWith("e")) {
             // Ends with 'e': just add 'r' and 'st', and also add "more"
+            // Two syllable adjectives can go either way.
             inflections.push(
                 { type: "comparative", form: term + "r" },
                 { type: "superlative", form: term + "st" },
@@ -656,7 +658,8 @@ function createVerbInflections(inflections, term){
     }
     else{
         // Check if the form is defined before pushing it to the inflections array
-        if (conjugations[0]?.PastTense) {
+        const pastTense = conjugations[0]?.PastTense
+        if (pastTense && termNotEqual(term, pastTense)) {
             inflections.push({ type: "past", form: conjugations[0].PastTense });
         }
 
@@ -686,7 +689,6 @@ function createInflectionContent(dictionary, inflections, term){
             term,
             [trans['type']]
         ];
-        //console.log(JSON.stringify(content));
         addEntry(dictionary, trans['form'], '', content, "non-lemma", "");
     });
 }
