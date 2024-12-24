@@ -21,7 +21,6 @@ async function prepareDictionary(filename, title, description){
 }
 
 async function buildDictionary(pathToFile, filename, title, description){
-
     const dictionary = await prepareDictionary(filename, 
         title, 
         description)

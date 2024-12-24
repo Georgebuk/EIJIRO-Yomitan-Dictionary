@@ -134,7 +134,7 @@ async function addMetaTags(dictionary) {
 
 /**
  * Builds a dictionary from an Excel file.
- * @param {{Object.<string, string[]>}} wordsToTags - Dictinoary of words to their tags
+ * @param {{Object.<string, string[]>}} wordsToTags - Dictinary of words to their tags
  * @returns {Promise<Dictionary>} - A promise that resolves to the created yomitan dictionary.
  */
 async function buildYomitanDictionary(wordsToTags){
@@ -144,13 +144,13 @@ async function buildYomitanDictionary(wordsToTags){
 
        // Set index
     const index = new DictionaryIndex()
-    .setTitle("英単語レベル辞書")
-    .setRevision('1.0')
-    .setAuthor('George')
-    .setDescription("さまざまな英単語のレベルを、一般的な学習時期や、一般的にどのようなテストに出題されるかという観点から表示します。")
-    .setAttribution('英語漬け')
-    .setUrl('https://www.eigo-duke.com/')
-    .build();
+      .setTitle("英単語レベル辞書")
+      .setRevision('1.0')
+      .setAuthor('George')
+      .setDescription("さまざまな英単語のレベルを、一般的な学習時期や、一般的にどのようなテストに出題されるかという観点から表示します。")
+      .setAttribution('英語漬け')
+      .setUrl('https://www.eigo-duke.com/')
+      .build();
     await dictionary.setIndex(index);
 
     for (const [word, tags] of Object.entries(wordsToTags)) {

@@ -133,3 +133,4 @@ dist
 test/
 potential_dictionaries/
 test_data/
+output/

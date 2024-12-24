@@ -1,14 +1,15 @@
 const fs = require("fs");
 const readline = require("readline");
-const { Dictionary, DictionaryIndex, TermEntry } = require('yomichan-dict-builder');
 const { combineWithSpace } = require('../../utils');
 const iconv = require('iconv-lite');
 const nlp = require('compromise');
-const inflection = require('./inflections')
+const inflection = require('./inflections');
+const YomitanDictionary = require("../YomitanDictionary");
 nlp.plugin(require('compromise-speech'))
 
 const testDataPath = "test_data/input.txt";
 const realDataPath = "test_data/EIJIRO144-10.txt"
+let dictionary;
 
 function extractSpeechExamples(line, definition) {
     let englishExample = null;
@@ -226,37 +227,11 @@ async function processFile(inputFile) {
     return termData;
 }
 
-
-async function createIndex(dictionary, title){
-    const index = new DictionaryIndex()
-    //英辞郎
-    .setTitle(title)
-    .setRevision('1.0')
-    .setAuthor('George')
-    .setDescription('Testing EN -> JP')
-    .setAttribution('No')
-    .build();
-
-    await dictionary.setIndex(index);
-
-}
-
 function createStructuredContent(olElement){
     return {
         type: "structured-content", 
         content: olElement
     };
-}
-
-function addEntry(dictionary, term, reading, sc, entryTag, termTags){
-    let entry = new TermEntry(term)
-        //.setReading(reading)
-        .setReading('')
-        .addDetailedDefinition(sc)
-        .setDefinitionTags(entryTag)
-        .setTermTags(termTags)
-        .build();
-    dictionary.addTerm(entry);
 }
 
 function createEnglishExample(term, example, inflections) {
@@ -390,17 +365,17 @@ async function* streamDictionary(lines) {
     }
 }
 
-function createInflectionContent(dictionary, inflections, term){
+function createInflectionContent(inflections, term){
     inflections.forEach((trans) => {
         let content = [
             term,
             [trans['type']]
         ];
-        addEntry(dictionary, trans['form'], '', content, "non-lemma", "");
+        dictionary.addEntry(trans['form'], '', content, "non-lemma", "");
     });
 }
 
-async function createEntries(dictionary, lines){
+async function createEntries(lines){
     const uniqueTags = new Set();
     let maxLines = Object.keys(lines).length;
     let curLine = 0;
@@ -412,7 +387,7 @@ async function createEntries(dictionary, lines){
         //     //createSentenceNounInflections(inflections, key);
         // }
         if(inflections)
-            createInflectionContent(dictionary, inflections, key);
+            createInflectionContent(inflections, key);
 
         let ipaLine = value.find((e) => e['type'] == "ipa")
         let reading = ipaLine?.['wordSplit'] ?? '';
@@ -444,7 +419,7 @@ async function createEntries(dictionary, lines){
             if(line['type'] == 'standard' || line['type'] == 'link'){
                 //When new tag found group definitions by tag and add as entry then start a new entry
                 if(line['tag'] != entryTag){
-                    addEntry(dictionary, key, reading, sc, entryTag, termTag);
+                    dictionary.addEntry(key, reading, sc, entryTag, termTag);
                     entryTag = line['tag'];
                     //reset elements for next entry
                     olElement = {tag: "ol", content:[]};
@@ -463,7 +438,7 @@ async function createEntries(dictionary, lines){
 
             //If last element in array, add current entry to dictionary
             if (index === value.length - 1) {
-                addEntry(dictionary, key, reading, sc, entryTag, termTag);
+                dictionary.addEntry(key, reading, sc, entryTag, termTag);
 
                 //reset elements for next entry
                 olElement = {tag: "ol", content:[]};
@@ -480,7 +455,7 @@ async function createEntries(dictionary, lines){
     console.log([...uniqueTags]);
 }
 
-async function createTags(dictionary) {
+async function createTags() {
     dictionary.addTag({
         name: '他動',
         category: 'wordPart',
@@ -663,21 +638,24 @@ async function createTags(dictionary) {
 // Process the lines
 (async () => {
     try {
-        const inputFile = realDataPath; 
-        //const inputFile = testDataPath;
+        dictionary = new YomitanDictionary("test.zip");
+        
+        //const [inputFile, name] = [realDataPath, "英辞郎"]; 
+        const [inputFile, name] = [testDataPath, "test"]; 
+
         await inflection.prepareInflections("noun.csv");
         const termData = await processFile(inputFile);
 
-        const dictionary = new Dictionary({
-            fileName: 'test.zip',
-          });
-        if(inputFile == testDataPath)
-            await createIndex(dictionary, 'test');
-        if(inputFile == realDataPath)
-            await createIndex(dictionary, '英辞郎');
-        await createEntries(dictionary, termData);
-        await createTags(dictionary);
-        await dictionary.export('./test');
+        dictionary.createIndex(
+            name,
+            'Testing EN -> JP',
+            'No',
+            'No'
+        );
+
+        await createEntries(termData);
+        await createTags();
+        dictionary.export()
     } catch (error) {
         console.error("Error reading or processing file:", error);
     }
