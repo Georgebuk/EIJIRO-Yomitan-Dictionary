@@ -384,50 +384,6 @@ function createExampleSentence(term, englishExample, japaneseExample, inflection
     }
 }
 
-function createSentenceInflections(inflections, term) {
-    const doc = nlp(term);
-
-    // Extract the verbs from the sentence
-    const verbs = doc.verbs();
-    if (verbs.length === 0) {
-        // No verbs found
-        return;
-    }
-
-    // Attempt to filter auxiliary verbs based on their forms
-    const auxiliaryPatterns = /^(be|been|being|was|were|is|are|has|have|had|will|shall|do|does|did)$/i;
-
-    const mainVerbs = verbs.json().filter(v => !auxiliaryPatterns.test(v.text));
-
-    if (mainVerbs.length === 0) {
-        // No main verbs found
-        return;
-    }
-
-    const mainVerb = mainVerbs[0].text; // Take the first detected main verb
-    const conjugations = verbs.conjugate().find(c => c.Infinitive === mainVerb);
-
-    if (!conjugations) {
-        // No conjugations are available
-        return;
-    }
-
-    const { PastTense, PresentTense, FutureTense, Infinitive } = conjugations;
-
-    // Reconstruct sentences with inflected verbs
-    inflections.push({ type: "past", form: replaceVerb(term, mainVerb, PastTense) });
-    inflections.push({ type: "present", form: replaceVerb(term, mainVerb, PresentTense) });
-    inflections.push({ type: "future", form: replaceVerb(term, mainVerb, FutureTense) });
-    inflections.push({ type: "infinitive", form: replaceVerb(term, mainVerb, Infinitive) });
-}
-
-// Helper function to replace the verb in the sentence
-function replaceVerb(sentence, originalVerb, inflectedVerb) {
-    // Use a regular expression to replace the first occurrence of the verb
-    const regex = new RegExp(`\\b${originalVerb}\\b`, 'i');
-    return sentence.replace(regex, inflectedVerb || originalVerb);
-}
-
 async function* streamDictionary(lines) {
     for (const [key, value] of Object.entries(lines)) {
         yield { key, value }; // Yield one entry at a time
